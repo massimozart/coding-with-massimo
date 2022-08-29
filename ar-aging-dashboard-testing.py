@@ -28,7 +28,6 @@ df_collections['Placement Date'] = pd.to_datetime(df_collections['Placement Date
 
 df_top5 = pd.read_excel(r'C:\Users\massimo.biagiotti\Desktop\Cloud Services - Weekly AR Aging Input.xlsx', sheet_name = 'Top 5 Customer Input USD', skiprows = 3, usecols = np.r_[1:22])
 df_top5 = df_top5.dropna(how = 'all')
-df_top5 = df_top5.sort_values(by = '90+')
 df_top5 = df_top5.rename(columns={'W/E Date': 'Month', 'BU Name': 'BU', 'Brand Master Group': 'Brand Master Grouping', 'Region Group': 'Location', '90+ % By BU': '90+ % by BU', 'Top 5  Customers': 'Customer' })
 
 
@@ -82,12 +81,11 @@ df_aging_monthly_region = df_aging_monthly.groupby(['Month', 'Consolidated BU' ,
 df_aging_monthly_region.reset_index(inplace = True)
 
 df_top5_region = df_top5
-df_top5_region = df_top5.groupby(['BU','Location', 'Brand']).sum()
+df_top5_region = df_top5.groupby(['BU','Location', 'Brand', 'Customer', 'Top 5 Notes']).sum()
 df_top5_region.reset_index(inplace = True)
-df_top5_region = df_top5_region[['BU','Location','Brand', 'Customer', 'Current', '1-30', '31-60', '61-90', '90+', 'Total A/R', '90+ %']]
+df_top5_region = df_top5_region[['BU','Location','Brand', 'Customer', 'Current', '1-30', '31-60', '61-90', '90+', 'Total A/R', '90+ %', 'Top 5 Notes']]
+df_top5_region = df_top5_region.sort_values('90+', ascending = False)
 
-
-print(df_top5_region)
 
 
 # print(df_aging_monthly_consolidated)
@@ -114,6 +112,9 @@ print(df_top5_region)
 
 # print(df_cm_aging_current_week_append)
 # print(df_cm_aging_current_week_append.dtypes)
+
+# print(df_top5_region)
+# print(df_top5_region.dtypes)
 
 #----------------------------------------------------------------------------------------------------------------------------------------
 
@@ -437,7 +438,7 @@ def update_graph(option_slctd, region_slctd):
                 header = dict(values = list(df_top5_test.columns),
                     fill_color = 'paleturquoise',
                     align = 'left'),
-                cells = dict(values=[df_top5_test.columns],
+                cells = dict(values=[df_top5_test.BU],
                     fill_color = 'lavender',
                     align = 'left'))
             ])
@@ -539,7 +540,7 @@ def update_graph(option_slctd, region_slctd):
                 header = dict(values = list(df_top5_test.columns),
                     fill_color = 'paleturquoise',
                     align = 'left'),
-                cells = dict(values=[df_top5_test.columns],
+                cells = dict(values=[df_top5_test['BU'],df_top5_test['Location'],df_top5_test['Brand'], df_top5_test['Customer'], df_top5_test['Current'], df_top5_test['1-30'], df_top5_test['31-60'], df_top5_test['61-90'], df_top5_test['90+'], df_top5_test['Total A/R'], df_top5_test['90+ %'], df_top5_test['Top 5 Notes']],
                     fill_color = 'lavender',
                     align = 'left'))
             ])
