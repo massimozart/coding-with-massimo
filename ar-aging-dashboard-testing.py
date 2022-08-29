@@ -10,7 +10,7 @@ import numpy as np
 from plotly.subplots import make_subplots
 
 
-app = Dash(__name__)
+app = Dash(__name__, external_stylesheets = [dbc.themes.SPACELAB], meta_tags = [{ 'name': 'viewport', 'content': 'width = device-width, initial-scale = 1, maximum-scale = 1'}])
 
 #-------------------------------------------------------------------------------------------------------------------------------------
 
@@ -23,6 +23,14 @@ df_collections = pd.read_excel(r'C:\Users\massimo.biagiotti\Desktop\Cloud Servic
 df_collections.sort_values(by = 'Placement Date')
 df_collections = df_collections.tail(13)
 df_collections['Placement Date'] = pd.to_datetime(df_collections['Placement Date'], format = '%y%m%d')
+
+# -- Top 5 Data --
+
+df_top5 = pd.read_excel(r'C:\Users\massimo.biagiotti\Desktop\Cloud Services - Weekly AR Aging Input.xlsx', sheet_name = 'Top 5 Customer Input USD', skiprows = 3, usecols = np.r_[1:22])
+df_top5 = df_top5.dropna(how = 'all')
+df_top5 = df_top5.sort_values(by = '90+')
+df_top5 = df_top5.rename(columns={'W/E Date': 'Month', 'BU Name': 'BU', 'Brand Master Group': 'Brand Master Grouping', 'Region Group': 'Location', '90+ % By BU': '90+ % by BU', 'Top 5  Customers': 'Customer' })
+
 
 # -- AR Current Month Aging (Weekly View) --
 
@@ -72,6 +80,15 @@ df_aging_monthly_consolidated.reset_index(inplace=True)
 df_aging_monthly_region = df_aging_monthly.groupby(['Month', 'Consolidated BU' ,'Location']).sum()
 
 df_aging_monthly_region.reset_index(inplace = True)
+
+df_top5_region = df_top5
+df_top5_region = df_top5.groupby(['BU','Location', 'Brand']).sum()
+df_top5_region.reset_index(inplace = True)
+df_top5_region = df_top5_region[['BU','Location','Brand', 'Customer', 'Current', '1-30', '31-60', '61-90', '90+', 'Total A/R', '90+ %']]
+
+
+print(df_top5_region)
+
 
 # print(df_aging_monthly_consolidated)
 # print(df_aging_monthly_region)
@@ -229,11 +246,9 @@ app.layout = html.Div([
 
    dcc.Graph(id = 'ar_aging', figure = {}),
 
-   html.Div([
-    dcc.Graph(id = 'ar_aging_indicator_month', style = {'display': 'inline-block'}, figure = {}),
-    dcc.Graph(id = 'ar_aging_indicator_week', style = {'display': 'inline-block'}, figure = {}),
+   dcc.Graph(id = 'ar_aging_indicators', figure = {}),
 
-   ]),
+   dcc.Graph(id = 'top_5', figure = {}),
  
    dcc.Graph(id = 'total_collections', figure = collections_gragh),
 
@@ -270,8 +285,8 @@ app.layout = html.Div([
 
 @app.callback(
     [Output(component_id = 'ar_aging', component_property = 'figure')],
-    [Output(component_id = 'ar_aging_indicator_month', component_property = 'figure')],
-    [Output(component_id = 'ar_aging_indicator_week', component_property = 'figure')],
+    [Output(component_id = 'ar_aging_indicators', component_property = 'figure')],
+    [Output(component_id = 'top_5', component_property = 'figure')],
     [Input(component_id = 'select_bu', component_property = 'value')],
     [Input(component_id = 'select_region', component_property = 'value')]
 
@@ -290,6 +305,12 @@ def update_graph(option_slctd, region_slctd):
     df_aging_monthly_region_test = df_aging_monthly_region 
     df_aging_monthly_region_test = df_aging_monthly_region_test[df_aging_monthly_region_test['Location'] == region_slctd]
     df_aging_monthly_region_test = df_aging_monthly_region_test[df_aging_monthly_region_test['Consolidated BU'] == option_slctd]
+
+    df_top5_test = df_top5_region
+    df_top5_test = df_top5_test[df_top5_test['Location'] == region_slctd]
+    df_top5_test = df_top5_test[df_top5_test['BU'] == option_slctd]
+
+
 
     ar_aging_title1 = (option_slctd + ' ' + region_slctd + ' ' + 'AR Aging' )
 
@@ -318,6 +339,7 @@ def update_graph(option_slctd, region_slctd):
 
             pm_aging_90amt = df_aging_monthly_consolidated_test.loc[(df_aging_monthly_consolidated_test['Consolidated BU'] == option_slctd) & (df_aging_monthly_consolidated_test['Month'] == pm_aging_month)]
             pm_aging_90amt = pm_aging_90amt.iloc[-1]['90+']
+
         
         except:
             cm_aging_90amt = 0
@@ -336,25 +358,32 @@ def update_graph(option_slctd, region_slctd):
 
         
 
-        aging_indicator_month = go.Figure(go.Indicator(
+        aging_indicators = go.Figure()
+
+        aging_indicators.add_trace(go.Indicator(
 
             mode = 'number+delta',
             value = cm_aging_90amt,
             delta = {'position': "bottom", 'reference': pm_aging_90amt, 'relative': True, 'valueformat': '.1%', 'increasing': {'color': "red"}, 'decreasing': {'color': "green"}},
             number = {'prefix': '$', 'suffix': 'k'},
-            title = {'text': 'Month Over Month 90+'}, 
-            domain = {'x': [0, 1], 'y': [0,1]}
+            title = {'text': 'Month Over Month 90+'},
+            domain = {'x': [0, 0.5], 'y': [0,0.5]}
             ))
 
-        aging_indicator_week = go.Figure(go.Indicator(
+        aging_indicators.add_trace(go.Indicator(
 
             mode = 'number+delta',
             value = cm_aging_90amt,
             delta = {'position': "bottom", 'reference': pm_aging_90amt, 'relative': True, 'valueformat': '.1%', 'increasing': {'color': "red"}, 'decreasing': {'color': "green"}},
             number = {'prefix': '$', 'suffix': 'k'},
             title = {'text':'Week Over Week 90+'},
-            domain = {'x': [0, 1], 'y': [0,1]}
+            domain = {'x': [0.5, 1], 'y': [0.5,1]}
             ))
+
+        # aging_indicators.update_layout(
+        #     height = 300,
+        #     width = 50
+        #     )
 
         aging_graph = make_subplots(specs=[[{"secondary_y": True}]])
         aging_graph.add_trace(
@@ -397,8 +426,21 @@ def update_graph(option_slctd, region_slctd):
             barmode = 'stack',
             title = ar_aging_title1 + '<br>' + '<span style="font-size: 12px;">By Month</span>' + '<br>' + str(ar_aging_title2),
 
-
             )
+
+
+        df_top5_test = df_top5_test.head(5)
+
+        top5_graph = go.Figure(
+
+            data = [go.Table(
+                header = dict(values = list(df_top5_test.columns),
+                    fill_color = 'paleturquoise',
+                    align = 'left'),
+                cells = dict(values=[df_top5_test.columns],
+                    fill_color = 'lavender',
+                    align = 'left'))
+            ])
 
     else:
 
@@ -420,26 +462,34 @@ def update_graph(option_slctd, region_slctd):
         except BaseException:
             ar_aging_title3 = 'No Data Present'
 
-        aging_indicator_month = go.Figure(go.Indicator(
+        aging_indicators = go.Figure()
+
+        aging_indicators.add_trace(go.Indicator(
 
             mode = 'number+delta',
             value = cm_aging_90amt,
             delta = {'position': "bottom", 'reference': pm_aging_90amt, 'relative': True, 'valueformat': '.1%', 'increasing': {'color': "red"}, 'decreasing': {'color': "green"}},
             number = {'prefix': '$', 'suffix': 'k'},
             title = {'text': 'Month Over Month 90+'},
-            domain = {'x': [0, 1], 'y': [0,1]},
+            domain = {'x': [0,0.5], 'y': [0,0]}
             ))
 
-        aging_indicator_week = go.Figure(go.Indicator(
+        aging_indicators.add_trace(go.Indicator(
 
             mode = 'number+delta',
             value = cm_aging_90amt,
             delta = {'position': "bottom", 'reference': pm_aging_90amt, 'relative': True, 'valueformat': '.1%', 'increasing': {'color': "red"}, 'decreasing': {'color': "green"}},
             number = {'prefix': '$', 'suffix': 'k'},
-            title = {'text': 'Week Over Week 90+'},
-            domain = {'x': [0, 1], 'y': [0,1]},
+            title = {'text':'Week Over Week 90+'},
+            domain = {'x': [0.5,1], 'y': [0,0]}
             ))
 
+        aging_indicators.update_layout(
+            height = 300
+            )
+        # aging_indicators.update_yaxes(
+        #     automargin = True
+        #     )
 
         aging_graph = make_subplots(specs=[[{"secondary_y": True}]])
         aging_graph.add_trace(
@@ -482,10 +532,22 @@ def update_graph(option_slctd, region_slctd):
                                   title = ar_aging_title1 + '<br>' + '<span style="font-size: 12px;">By Month</span>' + '<br>' + str(ar_aging_title3),
             )
 
+        df_top5_test = df_top5_test.head(5)
+        top5_graph = go.Figure(
+
+            data = [go.Table(
+                header = dict(values = list(df_top5_test.columns),
+                    fill_color = 'paleturquoise',
+                    align = 'left'),
+                cells = dict(values=[df_top5_test.columns],
+                    fill_color = 'lavender',
+                    align = 'left'))
+            ])
 
 
 
-    return aging_graph, aging_indicator_month, aging_indicator_week
+
+    return aging_graph, aging_indicators, top5_graph
 
 
 
@@ -494,4 +556,4 @@ def update_graph(option_slctd, region_slctd):
 
 # Run app
 if __name__ == '__main__':
-    app.run_server(debug=True, port = 8051)
+    app.run_server(debug = True,port = 8056)
