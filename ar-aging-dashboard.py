@@ -10,7 +10,7 @@ import numpy as np
 from plotly.subplots import make_subplots
 
 
-app = Dash(__name__)
+app = Dash(__name__, external_stylesheets = [dbc.themes.SPACELAB], meta_tags = [{ 'name': 'viewport', 'content': 'width = device-width, initial-scale = 1, maximum-scale = 1'}])
 
 #-------------------------------------------------------------------------------------------------------------------------------------
 
@@ -24,12 +24,34 @@ df_collections.sort_values(by = 'Placement Date')
 df_collections = df_collections.tail(13)
 df_collections['Placement Date'] = pd.to_datetime(df_collections['Placement Date'], format = '%y%m%d')
 
-# -- AR Current Month Aging (Weekly View) --
+# -- Top 5 Data --
+
+df_top5 = pd.read_excel(r'C:\Users\massimo.biagiotti\Desktop\Cloud Services - Weekly AR Aging Input.xlsx', sheet_name = 'Top 5 Customer Input USD', skiprows = 3, usecols = np.r_[1:22])
+df_top5 = df_top5.dropna(how = 'all')
+df_top5 = df_top5.rename(columns={'W/E Date': 'Month', 'BU Name': 'BU', 'Brand Master Group': 'Brand Master Grouping', 'Region Group': 'Location', '90+ % By BU': '90+ % by BU', 'Top 5  Customers': 'Customer' })
+
+
+# -- AR Current Month Aging (Current Month Weekly View) --
 
 df_cm_aging_weekly = pd.read_excel(r'C:\Users\massimo.biagiotti\Desktop\Cloud Services - Weekly AR Aging Input.xlsx', sheet_name = 'Aging USD', skiprows = 3, usecols = np.r_[0:17,19:25])
+df_cm_aging_weekly['W/E Date'] = df_cm_aging_weekly['W/E Date'].astype('datetime64')
+#df_cm_aging_weekly['W/E Date'] = pd.to_datetime(df_cm_aging_weekly['W/E Date']).dt.strftime('%Y-%m-%d')
+
 
 # dropping any null values from the dataframe
 df_cm_aging_weekly = df_cm_aging_weekly.dropna(how = 'all')
+
+# Getting the current week date
+
+df_cw_date = df_cm_aging_weekly.iloc[-1]['W/E Date']
+#df_cw_date['W/E Date'] = pd.to_datetime(df_cw_date['W/E Date']).dt.strftime('%Y-%m-%d')
+
+
+
+if df_cw_date == df_cm_aging_weekly.iloc[-1]['W/E Date']:
+    print("They are the same")
+else:
+    print("They arent the same")
 
 # -- AR Aging Historical Archive (Monthly) --
 
@@ -38,27 +60,56 @@ df_aging_monthly = pd.read_excel(r'C:\Users\massimo.biagiotti\Desktop\Cloud Serv
 # dropping any null values from the dataframe
 df_aging_monthly = df_aging_monthly.dropna(how = 'all')
 
+# -- AR Weekly Archive --
+
+df_aging_weekly_archive = pd.read_excel(r'C:\Users\massimo.biagiotti\Desktop\Cloud Services - Weekly AR Aging Input.xlsx', sheet_name = 'Aging Input - Historical Archiv', usecols = np.r_[0:17,19:25])
+
+# df_aging_weekly_archive['W/E Date'] = pd.to_datetime(df_aging_weekly_archive['W/E Date']).dt.strftime('%Y-%m-%d')
+df_aging_weekly_archive['W/E Date'] = df_aging_weekly_archive['W/E Date'].astype('datetime64')
+
+df_aging_weekly_archive = df_aging_weekly_archive.dropna(how = 'all')
+
+# Getting the Prior Week Date
+
+df_pw_date = df_aging_weekly_archive.iloc[-1]['W/E Date']
+#df_pw_date['W/E Date'] = pd.to_datetime(df_pw_date['W/E Date']).dt.strftime('%Y-%m-%d')
+
+print(df_cw_date, df_pw_date)
+
+# Appending the Weekly Archive to the Current Week
+
+
+frames = [df_aging_weekly_archive, df_cm_aging_weekly]
+df_aging_weekly = pd.concat(frames)
+
+# Renaming columns
+df_aging_weekly = df_aging_weekly.rename(columns = {'Consolidated BU': 'BU', 'Brand Master Group': 'Brand Master Grouping', 'Region Group': 'Location', '90+ % By BU': '90+ % by BU' })
+
+# Dropping any NA for good measure after appending
+
+df_aging_weekly = df_aging_weekly.dropna(how = 'all')
+
 
 # Need to create a new Dataframe from df_cm_aging_weekly
 # This Datafram will be appended to df_aging_monthly in order to create a historical archive along with a dynamic current month graph
 
 # Cleaning and reorganizing the weekly data prior to appending
-df_cm_aging_current_week_append = df_cm_aging_weekly
-df_cm_aging_current_week_append = df_cm_aging_current_week_append.drop(columns=['Input Owner'])
-df_cm_aging_current_week_append = df_cm_aging_current_week_append[['W/E Date', 'Brand', 'Brand Location Group', 'Brand Master Group', 'Consolidated BU','BU Name','Region Group', 'Country', 'Currency', 'Current', '1-30', '31-60', '61-90', '90+', 'Total A/R', '90+ %', '90+ % By BU', '90+ % Consolidated', '90+ % By Brand Location Group', '90+ % By Region Group', '90+ % By Brand Master Group', '90+ % By Consolidated BU']]
+df_cm_aging_current_week_to_month_append = df_cm_aging_weekly
+df_cm_aging_current_week_to_month_append = df_cm_aging_current_week_to_month_append.drop(columns=['Input Owner'])
+df_cm_aging_current_week_to_month_append = df_cm_aging_current_week_to_month_append[['W/E Date', 'Brand', 'Brand Location Group', 'Brand Master Group', 'Consolidated BU','BU Name','Region Group', 'Country', 'Currency', 'Current', '1-30', '31-60', '61-90', '90+', 'Total A/R', '90+ %', '90+ % By BU', '90+ % Consolidated', '90+ % By Brand Location Group', '90+ % By Region Group', '90+ % By Brand Master Group', '90+ % By Consolidated BU']]
 
 # Changing all weekly dates to first day of the month
-df_cm_aging_current_week_append['W/E Date'] = pd.to_datetime(pd.DataFrame({'day': 1,
-                                                                           'month': df_cm_aging_current_week_append['W/E Date'].dt.month,
-                                                                           'year': df_cm_aging_current_week_append['W/E Date'].dt.year},
-                                                                           index = df_cm_aging_current_week_append.index))
+df_cm_aging_current_week_to_month_append['W/E Date'] = pd.to_datetime(pd.DataFrame({'day': 1,
+                                                                           'month': df_cm_aging_current_week_to_month_append['W/E Date'].dt.month,
+                                                                           'year': df_cm_aging_current_week_to_month_append['W/E Date'].dt.year},
+                                                                           index = df_cm_aging_current_week_to_month_append.index))
 # Renaming columns to match Monthly columns    
-df_cm_aging_current_week_append = df_cm_aging_current_week_append.rename(columns={'W/E Date': 'Month', 'BU Name': 'BU', 'Brand Master Group': 'Brand Master Grouping', 'Region Group': 'Location', '90+ % By BU': '90+ % by BU' })
+df_cm_aging_current_week_to_month_append = df_cm_aging_current_week_to_month_append.rename(columns={'W/E Date': 'Month', 'BU Name': 'BU', 'Brand Master Group': 'Brand Master Grouping', 'Region Group': 'Location', '90+ % By BU': '90+ % by BU' })
 
 
-# Appending df_cm_aging_current_week_append to df_aging_monthly
+# Appending df_cm_aging_current_week_to_month_append to df_aging_monthly
 
-frames = [df_aging_monthly,df_cm_aging_current_week_append]
+frames = [df_aging_monthly,df_cm_aging_current_week_to_month_append]
 df_aging_monthly = pd.concat(frames)
 
 
@@ -66,12 +117,37 @@ df_aging_monthly = pd.concat(frames)
 # Creating DataFrame for Graphs
 
 df_aging_monthly_consolidated = df_aging_monthly.groupby(['Month', 'Consolidated BU']).sum()
-
 df_aging_monthly_consolidated.reset_index(inplace=True)
 
 df_aging_monthly_region = df_aging_monthly.groupby(['Month', 'Consolidated BU' ,'Location']).sum()
-
 df_aging_monthly_region.reset_index(inplace = True)
+
+df_top5_region = df_top5
+df_top5_region = df_top5_region.groupby(['BU','Location', 'Brand', 'Customer', 'Top 5 Notes']).sum()
+df_top5_region.reset_index(inplace = True)
+df_top5_region = df_top5_region[['BU','Location','Brand', 'Customer', 'Current', '1-30', '31-60', '61-90', '90+', 'Total A/R', '90+ %', 'Top 5 Notes']]
+df_top5_region = df_top5_region.sort_values('90+', ascending = False)
+
+
+df_top5_consolidated = df_top5
+df_top5_consolidated = df_top5_consolidated.groupby(['BU', 'Brand', 'Customer', 'Top 5 Notes']).sum()
+df_top5_consolidated.reset_index(inplace = True)
+df_top5_consolidated = df_top5_consolidated[['BU','Brand', 'Customer', 'Current', '1-30', '31-60', '61-90', '90+', 'Total A/R', '90+ %', 'Top 5 Notes']]
+df_top5_consolidated = df_top5_consolidated.sort_values('90+', ascending = False)
+
+df_aging_weekly_region = df_aging_weekly.groupby(['W/E Date','BU', 'Location']).sum()
+df_aging_weekly_region.reset_index(inplace = True)
+
+df_aging_weekly_consolidated = df_aging_weekly.groupby(['W/E Date', 'BU']).sum()
+df_aging_weekly_consolidated.reset_index(inplace = True)
+
+
+
+
+
+
+
+
 
 # print(df_aging_monthly_consolidated)
 # print(df_aging_monthly_region)
@@ -95,8 +171,11 @@ df_aging_monthly_region.reset_index(inplace = True)
 # print(df_aging_monthly)
 # print(df_aging_monthly.dtypes)
 
-# print(df_cm_aging_current_week_append)
-# print(df_cm_aging_current_week_append.dtypes)
+# print(df_cm_aging_current_week_to_month_append)
+# print(df_cm_aging_current_week_to_month_append.dtypes)
+
+# print(df_top5_region)
+# print(df_top5_region.dtypes)
 
 #----------------------------------------------------------------------------------------------------------------------------------------
 
@@ -179,13 +258,14 @@ collections_gragh.add_trace(
         name = 'Outstanding Balance at 3rd Party Collections'
     ))
 
-collections_gragh.update_layout(
-    title = ("Outstanding Balance at 3rd Party Collections = " +'$'+str(cm_collections_int) +'k' + " " + " & " + "Total Placements = "+"$" +str(cm_total_placements_int)+'k' + " " + "for" + " " + cm_month_name)
+# collections_gragh.update_layout(
+#     title = ("Outstanding Balance at 3rd Party Collections = " +'$'+str(cm_collections_int) +'k' + " " + " & " + "Total Placements = "+"$" +str(cm_total_placements_int)+'k' + " " + "for" + " " + cm_month_name)
+    
+#     )
 
-    )
 
-
-
+collections_gragh.update_layout(title_text = ("Outstanding Balance at 3rd Party Collections = " +'$'+str(cm_collections_int) +'k' + " " + " & " + "Total Placements = "+"$" +str(cm_total_placements_int)+'k' + " " + "for" + " " + cm_month_name))
+collections_gragh.update_layout({'margin':{'t':50}})
 
 
 
@@ -199,13 +279,14 @@ region_list.insert(0,{'label': 'Consolidated', 'value': 'Consolidated'})
 
 app.layout = html.Div([
 
+   html.Br(),
    html.H1("AR Aging Dashboard", style = {'text-align': 'center'}),
 
    html.Br(),
 
    html.H2("Weekly AR Report (in $1,000 USD) - " + str(cm_week_name), style = {'text-align': 'center'}),
 
-   html.Br(),
+   #html.Br(),
 
    html.Br(),
 
@@ -229,11 +310,9 @@ app.layout = html.Div([
 
    dcc.Graph(id = 'ar_aging', figure = {}),
 
-   html.Div([
-    dcc.Graph(id = 'ar_aging_indicator_month', style = {'display': 'inline-block'}, figure = {}),
-    dcc.Graph(id = 'ar_aging_indicator_week', style = {'display': 'inline-block'}, figure = {}),
+   dcc.Graph(id = 'ar_aging_indicators', figure = {}),
 
-   ]),
+   dcc.Graph(id = 'top_5', figure = {}),
  
    dcc.Graph(id = 'total_collections', figure = collections_gragh),
 
@@ -270,16 +349,19 @@ app.layout = html.Div([
 
 @app.callback(
     [Output(component_id = 'ar_aging', component_property = 'figure')],
-    [Output(component_id = 'ar_aging_indicator_month', component_property = 'figure')],
-    [Output(component_id = 'ar_aging_indicator_week', component_property = 'figure')],
+    [Output(component_id = 'ar_aging_indicators', component_property = 'figure')],
+    [Output(component_id = 'top_5', component_property = 'figure')],
     [Input(component_id = 'select_bu', component_property = 'value')],
     [Input(component_id = 'select_region', component_property = 'value')]
 
 )
 
+
+
 def update_graph(option_slctd, region_slctd):
     print(option_slctd)
     print(type(option_slctd))
+    print()
 
      
 
@@ -290,6 +372,23 @@ def update_graph(option_slctd, region_slctd):
     df_aging_monthly_region_test = df_aging_monthly_region 
     df_aging_monthly_region_test = df_aging_monthly_region_test[df_aging_monthly_region_test['Location'] == region_slctd]
     df_aging_monthly_region_test = df_aging_monthly_region_test[df_aging_monthly_region_test['Consolidated BU'] == option_slctd]
+
+    df_top5_region_test = df_top5_region
+    df_top5_region_test = df_top5_region_test[df_top5_region_test['Location'] == region_slctd]
+    df_top5_region_test = df_top5_region_test[df_top5_region_test['BU'] == option_slctd]
+
+    df_top5_consolidated_test = df_top5_consolidated
+    df_top5_consolidated_test = df_top5_consolidated_test[df_top5_consolidated_test['BU'] == option_slctd]
+
+
+    df_aging_weekly_consolidated_test = df_aging_weekly_consolidated
+    df_aging_weekly_consolidated_test = df_aging_weekly_consolidated_test[df_aging_weekly_consolidated_test['BU'] == option_slctd]
+
+    df_aging_weekly_region_test = df_aging_weekly_region
+    df_aging_weekly_region_test = df_aging_weekly_region_test[df_aging_weekly_region_test['Location'] == region_slctd]
+    df_aging_weekly_region_test = df_aging_weekly_region_test[df_aging_weekly_region_test['BU'] == option_slctd]
+
+
 
     ar_aging_title1 = (option_slctd + ' ' + region_slctd + ' ' + 'AR Aging' )
 
@@ -313,15 +412,41 @@ def update_graph(option_slctd, region_slctd):
     if region_slctd == 'Consolidated':
 
         try:
+
+            # Month over Month Current Month
             cm_aging_90amt = df_aging_monthly_consolidated_test.loc[(df_aging_monthly_consolidated_test['Consolidated BU'] == option_slctd) & (df_aging_monthly_consolidated_test['Month'] == cm_aging_month)]
             cm_aging_90amt = cm_aging_90amt.iloc[-1]['90+']
 
+           
+
+            # Month Over Month Prior Month
             pm_aging_90amt = df_aging_monthly_consolidated_test.loc[(df_aging_monthly_consolidated_test['Consolidated BU'] == option_slctd) & (df_aging_monthly_consolidated_test['Month'] == pm_aging_month)]
             pm_aging_90amt = pm_aging_90amt.iloc[-1]['90+']
+
+
+
         
         except:
             cm_aging_90amt = 0
             pm_aging_90amt = 0
+           
+
+
+        try:
+             # Week Over Week Current Week
+            cw_aging_90amt = df_aging_weekly_consolidated_test.loc[(df_aging_weekly_consolidated_test['BU'] == option_slctd) & (df_aging_weekly_consolidated_test['W/E Date'] == df_cw_date)]
+            cw_aging_90amt = cw_aging_90amt.iloc[-1]['90+']
+
+                        # Week Over Week Prior Week
+            pw_aging_90amt = df_aging_weekly_consolidated_test.loc[(df_aging_weekly_consolidated_test['BU'] == option_slctd) & (df_aging_weekly_consolidated_test['W/E Date'] == df_pw_date)]
+            pw_aging_90amt = pw_aging_90amt.iloc[-1]['90+']
+
+        except:
+            cw_aging_90amt = 0
+            pw_aging_90amt = 0
+
+
+
 
 
 
@@ -332,23 +457,74 @@ def update_graph(option_slctd, region_slctd):
             ar_aging_title2 = 'No Data Present'
        
 
-        aging_indicator_month = go.Figure(go.Indicator(
+        
 
-            mode = 'number+delta',
+        
+
+        aging_indicators = go.Figure()
+
+        aging_indicators.add_trace(go.Indicator(
+
+            mode = 'delta',
             value = cm_aging_90amt,
             delta = {'position': "bottom", 'reference': pm_aging_90amt, 'relative': True, 'valueformat': '.1%', 'increasing': {'color': "red"}, 'decreasing': {'color': "green"}},
             number = {'prefix': '$', 'suffix': 'k'},
-            domain = {'x': [0, 1], 'y': [0,1]}
+            title = {'text': 'MoM 90+ Delta'},
+            domain = {'x': [0,0.8], 'y': [0.7,1]}
             ))
 
-        aging_indicator_week = go.Figure(go.Indicator(
+        aging_indicators.add_trace(go.Indicator(
 
-            mode = 'number+delta',
+            mode = 'number',
             value = cm_aging_90amt,
-            delta = {'position': "bottom", 'reference': pm_aging_90amt, 'relative': True, 'valueformat': '.1%', 'increasing': {'color': "red"}, 'decreasing': {'color': "green"}},
             number = {'prefix': '$', 'suffix': 'k'},
-            domain = {'x': [0, 1], 'y': [0,1]}
+            title = {'text':'Current 90+'},
+            domain = {'x': [0.15, 1], 'y': [0,1]}
             ))
+
+        # aging_indicators.add_trace(go.Indicator(
+
+        #     mode = 'number',
+        #     value = pm_aging_90amt,
+        #     number = {'prefix': '$', 'suffix': 'k'},
+        #     title = {'text': 'Prior Month 90+'},
+        #     domain = {'x': [0,0.6], 'y': [0.6,1]}
+        #     ))
+
+        aging_indicators.add_trace(go.Indicator(
+
+            mode = 'delta',
+            value = cw_aging_90amt,
+            delta = {'position': "bottom", 'reference': pw_aging_90amt, 'relative': True, 'valueformat': '.1%', 'increasing': {'color': "red"}, 'decreasing': {'color': "green"}},
+            number = {'prefix': '$', 'suffix': 'k'},
+            title = {'text':'WoW 90+ Delta'},
+            domain = {'x': [0,0.8], 'y': [0,0.3]}
+            ))
+
+        # aging_indicators.add_trace(go.Indicator(
+
+        #     mode = 'number',
+        #     value = cw_aging_90amt,
+        #     number = {'prefix': '$', 'suffix': 'k'},
+        #     title = {'text':'Current Week 90+'},
+        #     domain = {'x': [0,0.8], 'y': [0.7,1]}
+        #     ))
+
+        # aging_indicators.add_trace(go.Indicator(
+
+        #     mode = 'number',
+        #     value = pw_aging_90amt,
+        #     number = {'prefix': '$', 'suffix': 'k'},
+        #     title = {'text': 'Prior Week 90+'},
+        #     domain = {'x': [0.15, 1], 'y': [0,1]}
+        #     ))
+
+
+
+        # aging_indicators.update_layout(
+        #     height = 300,
+        #     width = 50
+        #     )
 
         aging_graph = make_subplots(specs=[[{"secondary_y": True}]])
         aging_graph.add_trace(
@@ -391,8 +567,24 @@ def update_graph(option_slctd, region_slctd):
             barmode = 'stack',
             title = ar_aging_title1 + '<br>' + '<span style="font-size: 12px;">By Month</span>' + '<br>' + str(ar_aging_title2),
 
-
             )
+
+
+        df_top5_consolidated_test = df_top5_consolidated_test.head(5)
+
+        top5_graph = go.Figure(
+
+            data = [go.Table(
+                header = dict(values = list(df_top5_consolidated_test.columns),
+                    fill_color = 'paleturquoise',
+                    align = 'left'),
+                cells = dict(values=[df_top5_consolidated_test['BU'],df_top5_consolidated_test['Brand'], df_top5_consolidated_test['Customer'], df_top5_consolidated_test['Current'], df_top5_consolidated_test['1-30'], df_top5_consolidated_test['31-60'], df_top5_consolidated_test['61-90'], df_top5_consolidated_test['90+'], df_top5_consolidated_test['Total A/R'], df_top5_consolidated_test['90+ %'], df_top5_consolidated_test['Top 5 Notes']],
+                    fill_color = 'lavender',
+                    align = 'left'))
+            ])
+
+        top5_graph.update_layout(title_text = 'Top 5 High Risk Accounts')
+        top5_graph.update_layout({'margin':{'t':50}})
 
     else:
 
@@ -401,12 +593,32 @@ def update_graph(option_slctd, region_slctd):
             cm_aging_90amt = df_aging_monthly_region.loc[(df_aging_monthly_region['Consolidated BU'] == option_slctd) & (df_aging_monthly_region['Month'] == cm_aging_month) & (df_aging_monthly_region['Location'] == region_slctd)]
             cm_aging_90amt = cm_aging_90amt.iloc[-1]['90+']
 
+
             pm_aging_90amt = df_aging_monthly_region.loc[(df_aging_monthly_region['Consolidated BU'] == option_slctd) & (df_aging_monthly_region['Month'] == pm_aging_month) & (df_aging_monthly_region['Location'] == region_slctd)]
             pm_aging_90amt = pm_aging_90amt.iloc[-1]['90+']
+
+
         
         except BaseException:
             cm_aging_90amt = 0
             pm_aging_90amt = 0
+
+
+        try:
+            cw_aging_90amt = df_aging_weekly_region_test.loc[(df_aging_weekly_region_test['BU'] == option_slctd) & (df_aging_weekly_region_test['W/E Date'] == df_cw_date) & (df_aging_weekly_region_test['Location'] == region_slctd)]
+            cw_aging_90amt = cw_aging_90amt.iloc[-1]['90+']
+
+            pw_aging_90amt = df_aging_weekly_region_test.loc[(df_aging_weekly_region_test['BU'] == option_slctd) & (df_aging_weekly_region_test['W/E Date'] == df_pw_date) & (df_aging_weekly_region_test['Location'] == region_slctd)]
+            pw_aging_90amt = pw_aging_90amt.iloc[-1]['90+']
+
+        except:
+            cw_aging_90amt = 0
+            pw_aging_90amt = 0
+
+
+
+
+
 
         try:
             ar_aging_title3 = ('<span style="font-size: 21px;">Percentage of 90+ Over Total AR = ' + str(round(df_aging_monthly_region_test.iloc[-1]['90+ % By Region Group'].sum()*100,1)) + '%' +'</span>')
@@ -414,24 +626,46 @@ def update_graph(option_slctd, region_slctd):
         except BaseException:
             ar_aging_title3 = 'No Data Present'
 
-        aging_indicator_month = go.Figure(go.Indicator(
+        aging_indicators = go.Figure()
 
-            mode = 'number+delta',
+        aging_indicators.add_trace(go.Indicator(
+
+            mode = 'delta',
             value = cm_aging_90amt,
             delta = {'position': "bottom", 'reference': pm_aging_90amt, 'relative': True, 'valueformat': '.1%', 'increasing': {'color': "red"}, 'decreasing': {'color': "green"}},
             number = {'prefix': '$', 'suffix': 'k'},
-            domain = {'x': [0, 1], 'y': [0,1]},
+            title = {'text': 'MoM 90+ Delta'},
+            domain = {'x': [0,0.8], 'y': [0.7,1]}
             ))
 
-        aging_indicator_week = go.Figure(go.Indicator(
+        aging_indicators.add_trace(go.Indicator(
 
-            mode = 'number+delta',
+            mode = 'number',
             value = cm_aging_90amt,
-            delta = {'position': "bottom", 'reference': pm_aging_90amt, 'relative': True, 'valueformat': '.1%', 'increasing': {'color': "red"}, 'decreasing': {'color': "green"}},
             number = {'prefix': '$', 'suffix': 'k'},
-            domain = {'x': [0, 1], 'y': [0,1]},
+            title = {'text':'Current 90+'},
+            domain = {'x': [0.15, 1], 'y': [0,1]}
             ))
 
+        aging_indicators.add_trace(go.Indicator(
+
+            mode = 'delta',
+            value = cw_aging_90amt,
+            delta = {'position': "bottom", 'reference': pw_aging_90amt, 'relative': True, 'valueformat': '.1%', 'increasing': {'color': "red"}, 'decreasing': {'color': "green"}},
+            number = {'prefix': '$', 'suffix': 'k'},
+            title = {'text':'WoW 90+ Delta'},
+            domain = {'x': [0,0.8], 'y': [0,0.3]}
+            ))
+
+
+
+
+        aging_indicators.update_layout(
+            height = 300
+            )
+        # aging_indicators.update_yaxes(
+        #     automargin = True
+        #     )
 
         aging_graph = make_subplots(specs=[[{"secondary_y": True}]])
         aging_graph.add_trace(
@@ -474,10 +708,25 @@ def update_graph(option_slctd, region_slctd):
                                   title = ar_aging_title1 + '<br>' + '<span style="font-size: 12px;">By Month</span>' + '<br>' + str(ar_aging_title3),
             )
 
+        df_top5_region_test = df_top5_region_test.head(5)
+        top5_graph = go.Figure(
+
+            data = [go.Table(
+                header = dict(values = list(df_top5_region_test.columns),
+                    fill_color = 'paleturquoise',
+                    align = 'left'),
+                cells = dict(values=[df_top5_region_test['BU'],df_top5_region_test['Location'],df_top5_region_test['Brand'], df_top5_region_test['Customer'], df_top5_region_test['Current'], df_top5_region_test['1-30'], df_top5_region_test['31-60'], df_top5_region_test['61-90'], df_top5_region_test['90+'], df_top5_region_test['Total A/R'], df_top5_region_test['90+ %'], df_top5_region_test['Top 5 Notes']],
+                    fill_color = 'lavender',
+                    align = 'left'))
+            ])
+
+        top5_graph.update_layout(title_text = 'Top 5 High Risk Accounts')
+        top5_graph.update_layout({'margin':{'t':50}})
 
 
 
-    return aging_graph, aging_indicator_month, aging_indicator_week
+
+    return aging_graph, aging_indicators, top5_graph
 
 
 
@@ -486,4 +735,4 @@ def update_graph(option_slctd, region_slctd):
 
 # Run app
 if __name__ == '__main__':
-    app.run_server(debug=True, port = 8051)
+    app.run_server(debug = True,port = 8056)
